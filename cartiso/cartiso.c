@@ -33,6 +33,10 @@
 #  include "hdf5cartiso.h"
 #endif
 
+#ifdef HAS_CATALYST
+#  include "catalyst.h"
+#endif
+
 /*## End of Output Module Includes ##*/
 
 void print_usage(int rank, const char *errstr)
@@ -107,6 +111,11 @@ void print_usage(int rank, const char *errstr)
     fprintf(stderr, "    --hdf5p_chunk CI : Integer percentage of triangles (CI); isosurface output.\n"
                     "      valid values are 0 < CI <= 100 \n");
 #endif
+
+#ifdef HAS_CATALYST
+    fprintf(stderr, "    --catalyst SCRIPT : Enable Catalyst output through input script (SCRIPT).\n");
+#endif
+
     /*## End of Output Module Usage Strings ##*/
 }
 
@@ -219,6 +228,10 @@ int main(int argc, char **argv)
     hsize_t *hdf5p_chunk=NULL;
 #endif
 
+#ifdef HAS_CATALYST
+    void* catalystProcessor = NULL;
+#endif
+
     /*## End of Output Module Variables ##*/
 
     /* Init MPI */
@@ -314,6 +327,12 @@ int main(int argc, char **argv)
         else if(!strcasecmp(argv[a], "--hdf5p_chunk")) {
 	  hdf5p_chunk = malloc(1 * sizeof(hsize_t));
 	  hdf5p_chunk[0] = (hsize_t)strtoul(argv[++a], NULL, 0);
+        }
+#endif
+
+#ifdef HAS_CATALYST
+        else if(!strcasecmp(argv[a], "--catalyst")) {
+          catalystProcessor = catalystInitialize(argv[++a]);
         }
 #endif
 
@@ -518,6 +537,9 @@ int main(int argc, char **argv)
             writepvti("cartiso", "noise", comm, rank, nprocs, tt, ni, nj, nk,
                       is, is+cni-1, js, js+cnj-1, ks, ks+cnk-1, 
                       deltax, deltay, deltaz, xdata);
+            printf("vals are %d %d %d %d %d  %d %d %d %d %d %f %f %f\n", rank, ni, nj, nk,
+                   is, is+cni-1, js, js+cnj-1, ks, ks+cnk-1,
+                   deltax, deltay, deltaz);
         }
 #endif
 
@@ -592,8 +614,22 @@ int main(int argc, char **argv)
 		       iso.points, iso.norms, iso.xvals, "noise", hdf5p_chunk);
         }
 #endif
-
         /*## End of ISOSURFACE OUTPUT Module Function Calls Per Timestep ##*/
+
+        /*## Add Combined FULL and ISOSURfACE OUTPUT Module Function Calls Per Timestep Here ##*/
+#ifdef HAS_CATALYST
+        if(catalystProcessor) {
+            if(rank == 0) {
+                printf("      Outputting catalyst...\n");   fflush(stdout);
+            }
+            catalystOutput(catalystProcessor, tt, ni, nj, nk,
+                           is, is+cni-1, js, js+cnj-1, ks, ks+cnk-1,
+                           deltax, deltay, deltaz, data, "value", xdata, "noise",
+                           iso.ntris, iso.points, iso.norms, iso.xvals, "noise");
+        }
+#endif
+        /*## End of Combined FULL and ISOSURfACE OUTPUT Module Function Calls Per Timestep ##*/
+
 
         timer_tock(&isoouttime);
         timer_collectprintstats(computetime, comm, 0, "   Compute");
@@ -620,7 +656,12 @@ int main(int argc, char **argv)
     free(hdf5i_chunk);
     free(hdf5p_chunk);
 #endif
- 
+
+#ifdef HAS_CATALYST
+    if(catalystProcessor) catalystFinalize(catalystProcessor);
+    catalystProcessor = NULL;
+#endif
+
     MPI_Finalize();
  
     return 0;
