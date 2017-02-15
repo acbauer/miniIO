@@ -1,5 +1,5 @@
 /*
- * Copyright (c) DoD HPCMP PETTT.  All rights reserved.  
+ * Copyright (c) DoD HPCMP PETTT.  All rights reserved.
  * See LICENSE file for details.
  */
 
@@ -35,6 +35,10 @@
 
 #ifdef HAS_CATALYST
 #  include "catalyst.h"
+#endif
+
+#ifdef HAS_SENSEI
+#  include "sensei.h"
 #endif
 
 /*## End of Output Module Includes ##*/
@@ -116,6 +120,9 @@ void print_usage(int rank, const char *errstr)
     fprintf(stderr, "    --catalyst SCRIPT : Enable Catalyst output through input script (SCRIPT).\n");
 #endif
 
+#ifdef HAS_SENSEI
+    fprintf(stderr, "    --sensei XML : Enable SENSEI output through input XML file (XML).\n");
+#endif
     /*## End of Output Module Usage Strings ##*/
 }
 
@@ -232,6 +239,9 @@ int main(int argc, char **argv)
     void* catalystProcessor = NULL;
 #endif
 
+#ifdef HAS_SENSEI
+    void* senseiProcessor = NULL;
+#endif
     /*## End of Output Module Variables ##*/
 
     /* Init MPI */
@@ -336,6 +346,11 @@ int main(int argc, char **argv)
         }
 #endif
 
+#ifdef HAS_SENSEI
+        else if(!strcasecmp(argv[a], "--sensei")) {
+          senseiProcessor = senseiInitialize(argv[++a]);
+        }
+#endif
         /*## End of Output Module Command Line Arguments ##*/
 
         else {
@@ -628,6 +643,18 @@ int main(int argc, char **argv)
                            iso.ntris, iso.points, iso.norms, iso.xvals, "noise");
         }
 #endif
+
+#ifdef HAS_SENSEI
+        if(senseiProcessor) {
+            if(rank == 0) {
+                printf("      Outputting sensei...\n");   fflush(stdout);
+            }
+            senseiOutput(senseiProcessor, tt, ni, nj, nk,
+                         is, is+cni-1, js, js+cnj-1, ks, ks+cnk-1,
+                         deltax, deltay, deltaz, data, "value", xdata, "noise");
+        }
+#endif
+
         /*## End of Combined FULL and ISOSURfACE OUTPUT Module Function Calls Per Timestep ##*/
 
 
@@ -662,8 +689,13 @@ int main(int argc, char **argv)
     catalystProcessor = NULL;
 #endif
 
+#ifdef HAS_SENSEI
+    if(senseiProcessor) senseiFinalize(senseiProcessor);
+    senseiProcessor = NULL;
+#endif
+
     MPI_Finalize();
- 
+
     return 0;
 }
 

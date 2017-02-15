@@ -39,7 +39,7 @@ if(ENABLE_HDF5)
   add_definitions(-DHAS_HDF5)
 endif()
 
-set(ENABLE_CATALYST ON CACHE BOOL "Enable Catalyst")
+set(ENABLE_CATALYST OFF CACHE BOOL "Enable Catalyst")
 if(ENABLE_CATALYST)
   # we only need C++ compilers if we're building the Adaptor
   enable_language(CXX)
@@ -51,7 +51,25 @@ if(ENABLE_CATALYST)
   if(NOT PARAVIEW_USE_MPI)
     message(SEND_ERROR "ParaView must be built with MPI enabled")
   endif()
-else()
+endif()
+
+set(ENABLE_SENSEI OFF CACHE BOOL "Enable SENSEI")
+if(ENABLE_SENSEI)
+  # we only need C++ compilers if we're building the Adaptor
+  enable_language(CXX)
+  find_package(SENSEI REQUIRED sensei)
+  include_directories(${SENSEI_INCLUDE_DIRS})
+  if (NOT ENABLE_PARAVIEW)
+    # we need to also bring in VTK if it's not already available
+    find_package(ParaView REQUIRED vtkPVPythonCatalyst HINTS ${VTK_DIR}/.. )
+    include("${PARAVIEW_USE_FILE}")
+  endif()
+  list(APPEND SOURCES sensei.cxx)
+  add_definitions("-DHAS_SENSEI")
+endif()
+
+if(NOT ENABLE_CATALYST AND NOT ENABLE_SENSEI)
+  # we need to manually link against MPI, otherwise we just use the SENSEI or Catalyst one
   find_package(MPI REQUIRED)
   include_directories(${MPI_C_INCLUDE_PATH})
 endif()
@@ -63,8 +81,16 @@ if(ENABLE_CATALYST)
   #include(vtkMPI)
   #vtk_mpi_link(cartiso)
 endif()
+if(ENABLE_SENSEI)
+  find_package (Threads)
+  #target_link_libraries(cartiso LINK_PRIVATE ${SENSEI_LIBS} ${CMAKE_THREAD_LIBS_INIT} vtkCommonDataModel vtkCommonCore vtkFiltersCore)
+  list(APPEND LIBS ${SENSEI_LIBS} ${CMAKE_THREAD_LIBS_INIT} vtkPVPythonCatalyst ${VTK_LIBRARIES})
+  include(vtkModuleMacros)
+  include(vtkMPI)
+  vtk_mpi_link(cartiso)
+endif()
 
-target_link_libraries(cartiso LINK_PRIVATE ${LIBS} ${MPI_LIBRARIES} m)
+target_link_libraries(cartiso LINK_PRIVATE ${LIBS} ${MPI_LIBRARIES} ${MPI_CXX_LIBRARIES} /usr/lib/openmpi/lib/libmpi_cxx.so m)
 
 option(BUILD_TESTING "Build Testing" OFF)
 # Setup testing.
